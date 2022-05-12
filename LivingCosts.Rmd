@@ -14,10 +14,6 @@ here()
 #import FMR HUD data sets from 2010 to 2019
 FMR10 <- read_excel(here("FMR_2010_2019", "FY2010_4050_Final_PostRDDs.xls"))
 FMR11 <- read_excel(here("FMR_2010_2019", "FY2011_4050_Final.xls"))
-```
-
-
-```{r Import Files}
 FMR12 <- read_excel(here("FMR_2010_2019", "FY2012_4050_Final.xls"))
 FMR13 <- read_excel(here("FMR_2010_2019", "FY2013_4050_Final.xls"))
 FMR14 <- read_excel(here("FMR_2010_2019", "FY2014_4050_RevFinal.xls"))

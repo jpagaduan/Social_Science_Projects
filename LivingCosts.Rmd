@@ -5,7 +5,6 @@ output: html_notebook
 
 ```{r Import Files}
 library("dplyr")
-
 library("readxl")
 library("here")
 
@@ -60,12 +59,59 @@ FMR_1BR_10_19 <- FMR_1BR_10_19 %>% mutate(year_cost = w_mean * 12,
                                           req_sal_food = required_salary + (300 * 12)) # Assume food costs $300 per month
 ```
 
-
 ```{r Eport Files}
 library(xlsx)
 
 #export table into xlsx
 write.xlsx(FMR_1BR_10_19, here("FMR_2010_2019", "FMR_1BR_10_19.xlsx"))
 ```
+
+```{r Merge with BLS wage data}
+#create dataframe to match wages data set
+HousingFoodCosts <- FMR_1BR_10_19 %>% select(Year = year, ave_wage = req_sal_food) %>% mutate(Industry = "Living Costs")
+
+#reorder columns
+HousingFoodCosts <- HousingFoodCosts[,c(1,3,2)]
+
+#Import wage data
+wages <- read_excel(here("HomelessnessWorkersWages.xlsx"), sheet = "Data")
+
+wages <- wages %>% group_by(Year, Industry) %>% summarise(ave_wage = mean(`Average Annual Pay`))
+
+#merge wage and living costs estimates into one data frame
+AllCosts <- rbind(HousingFoodCosts, wages)
+
+AllCosts$Year <- as.Date()
+
+```
+
+
+```{r Visualize Data}
+library(ggplot2)
+
+ggplot(AllCosts, aes(Year, ave_wage, , group = Industry)) +
+  geom_line(aes(linetype = Industry, color = Industry)) +
+  geom_point(aes(color = Industry)) +
+  scale_linetype_manual(values = c("dotted", "twodash", "twodash", "twodash")) +
+  scale_color_manual(values = c("#0000CD", "#9400D3", "#FF0000", "#228B22")) +
+  labs(x = "Year",
+       y = "Average Salary",
+       title = "Average Salary vs. Housing and Food Costs"
+       #caption = "Living costs for 2020 is missing as HUD FMR data ends at 2019"
+       ) +
+  scale_y_continuous(labels = scales::dollar) +
+  scale_x_continuous(breaks = AllCosts$Year) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5, vjust = 5),
+        plot.caption = element_text(hjust = 0.5),
+        plot.margin = unit(c(1,2,1,.5), "cm"),
+        axis.title.y = element_text(vjust = 5),
+        axis.title.x = element_text(vjust = -2),
+        legend.position = "bottom",
+        legend.text = element_text(size = 8))
+```
+
+
+
 
 

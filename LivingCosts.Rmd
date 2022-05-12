@@ -1,0 +1,75 @@
+---
+title: "Wages and Cost of Living in the Homelessness Sector"
+output: html_notebook
+---
+
+```{r Import Files}
+library("dplyr")
+
+library("readxl")
+library("here")
+
+here()
+
+#import FMR HUD data sets from 2010 to 2019
+FMR10 <- read_excel(here("FMR_2010_2019", "FY2010_4050_Final_PostRDDs.xls"))
+FMR11 <- read_excel(here("FMR_2010_2019", "FY2011_4050_Final.xls"))
+```
+
+
+```{r Import Files}
+FMR12 <- read_excel(here("FMR_2010_2019", "FY2012_4050_Final.xls"))
+FMR13 <- read_excel(here("FMR_2010_2019", "FY2013_4050_Final.xls"))
+FMR14 <- read_excel(here("FMR_2010_2019", "FY2014_4050_RevFinal.xls"))
+FMR15 <- read_excel(here("FMR_2010_2019", "FY2015_4050_RevFinal.xls"))
+FMR16 <- read_excel(here("FMR_2010_2019", "FY2016F-4050-RevFinal4.xlsx"))
+FMR17 <- read_excel(here("FMR_2010_2019", "FY2017-4050-County-Level_Data.xlsx"))
+FMR18 <- read_excel(here("FMR_2010_2019", "FY18_4050_FMRs_rev.xlsx"))
+FMR19 <- read_excel(here("FMR_2010_2019", "FY2019_4050_FMRs_rev2.xlsx"))
+```
+
+
+```{r Analysis}
+#calculate weighted mean 1BR FMR for each year 
+m10 <- FMR10 %>% select(fmr1, pop2000) %>% mutate(prod = (fmr1 * pop2000)) %>% summarise(year = 2010, w_mean = sum(prod)/sum(pop2000))
+m11 <- FMR11 %>% select(fmr1, pop2000) %>% mutate(prod = (fmr1 * pop2000)) %>%  summarise(year = 2011,w_mean = sum(prod)/sum(pop2000))
+m12 <- FMR12 %>% select(fmr1, pop2000) %>% mutate(prod = (fmr1 * pop2000)) %>%  summarise(year = 2012,w_mean = sum(prod)/sum(pop2000))
+
+m13 <- FMR13 %>% na.omit(FMR13) %>% select(fmr1, pop2010) %>% mutate(prod = fmr1*pop2010) %>% 
+  summarise(year = 2013, w_mean = sum(prod)/sum(pop2010))
+
+m14 <- FMR14 %>% na.omit(FMR13) %>% select(fmr1, pop2010) %>% mutate(prod = fmr1*pop2010) %>% 
+  summarise(year = 2014, w_mean = sum(prod)/sum(pop2010))
+
+m15 <- FMR15 %>% na.omit(FMR13) %>% select(fmr1, pop2010) %>% mutate(prod = fmr1*pop2010) %>% 
+  summarise(year = 2015, w_mean = sum(prod)/sum(pop2010))
+
+m16 <- FMR16 %>% na.omit(FMR13) %>% select(fmr1, pop2010) %>% mutate(prod = fmr1*pop2010) %>% 
+  summarise(year = 2016, w_mean = sum(prod)/sum(pop2010))
+
+m17 <- FMR17 %>% na.omit(FMR13) %>% select(fmr1, pop2010) %>% mutate(prod = fmr1*pop2010) %>% 
+  summarise(year = 2017, w_mean = sum(prod)/sum(pop2010))
+
+m18 <- FMR18 %>% na.omit(FMR13) %>% select(fmr_1, pop2010) %>% mutate(prod = fmr_1*pop2010) %>% 
+  summarise(year = 2018, w_mean = sum(prod)/sum(pop2010))
+
+m19 <- FMR19 %>% select(fmr_1, pop2010) %>% mutate(prod = (fmr_1 * pop2010)) %>% summarise(year = 2019,w_mean = sum(prod)/sum(pop2010))
+
+#Join means together in a data frame
+FMR_1BR_10_19 <- rbind(m10, m11, m12, m13, m14, m15, m16, m17, m18, m19)
+
+#calculate cost of living
+FMR_1BR_10_19 <- FMR_1BR_10_19 %>% mutate(year_cost = w_mean * 12, 
+                                          required_salary = (w_mean / .3) * 12,
+                                          req_sal_food = required_salary + (300 * 12)) # Assume food costs $300 per month
+```
+
+
+```{r Eport Files}
+library(xlsx)
+
+#export table into xlsx
+write.xlsx(FMR_1BR_10_19, here("FMR_2010_2019", "FMR_1BR_10_19.xlsx"))
+```
+
+

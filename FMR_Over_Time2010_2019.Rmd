@@ -47,7 +47,7 @@ m19 <- FMR19 %>% select(fmr1 = fmr_1, pop = pop2010, countyname, state_alpha, FI
 FMR_1BR_10_19 <- rbind(m10, m11, m12, m13, m14, m15, m16, m17, m18, m19) 
 
 #Remove U.S. territories
-FMR_1BR_10_19 <- FMR_1BR_10_19 %>% filter(state_alpha != "PR" & state_alpha != "SA" & state_alpha != "GU")
+FMR_1BR_10_19 <- FMR_1BR_10_19 %>% filter(state_alpha != "PR" & state_alpha != "SA" & state_alpha != "GU" & state_alpha != "MP")
 
 #remove no longer needed variables
 rm(m10, m11, m12, m13, m14, m15, m16, m17, m18, m19)
@@ -56,6 +56,34 @@ write.xlsx(FMR_1BR_10_19, here("FMR_2010_2019", "FMR_Original.xlsx"))
 
 FMR_1BR_10_19 <- na.omit(FMR_1BR_10_19)
 ```
+
+```{r Find the highest average FMR by county and state}
+#Find the counties with the highest monthly rent
+FMR_1BR_10_19 %>% filter (year == 2019) %>% 
+  group_by(state = state_alpha, county = countyname) %>% 
+  summarise(FMR_1BR = mean(w_mean)) %>% 
+  arrange(desc(FMR_1BR))
+
+#Find the state with the highest monthly rent
+FMR_1BR_10_19 %>% filter (year == 2019) %>% 
+  group_by(state = state_alpha) %>% 
+  summarise(FMR_1BR = mean(w_mean)) %>% 
+  arrange(desc(FMR_1BR))
+```
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+
+ggplot(FMR_1BR_10_19, aes(year, w_mean, group = year, label = countyname)) +
+  geom_boxplot() +
+  scale_x_continuous(breaks = seq(2010, 2019, by = 1)) +
+  labs(title = "Monthly Rent by County and Year",
+       y = "Rent") +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
 
 ```{r Change in 1BR FMR per year}
 #calculate weighted mean 1BR FMR for each year 
@@ -90,17 +118,31 @@ rm(base, cur, sub, ap)
 
 ```{r Visualize FMR PRCNT Changes over time}
 library(ggplot2)
+library(ggrepel)
 
 FMR_Change_clean <- FMR_Change %>% 
   group_by(FIPS, state_alpha, countyname, year) %>% 
   summarise(mean_change = mean(FMR_PCT_Change)) %>% 
   arrange(desc(year))
 
-ggplot(FMR_Change_clean, aes(year, mean_change, group = year)) +
+
+#Since we don't have the 2010 FMR Change, exclude it from the graph 
+FMR_Change_2011_2019 <- FMR_Change_clean %>% filter(year != 2010)
+
+FMR_Change_2011_2019 %>% group_by(state_alpha, countyname, year) %>% summarize(change = mean(mean_change)) %>% arrange(desc(change))
+
+ggplot(FMR_Change_2011_2019, aes(year, mean_change, group = year, label = countyname)) +
   geom_boxplot() +
+  geom_label_repel(aes(label = ifelse(mean_change > .5 | mean_change < -.3,
+                                      as.character(countyname),"")),
+                   box.padding   = 0.35, 
+                   point.padding = 0.5,
+                   segment.color = 'grey50',
+                   size = 2) +
   scale_x_continuous(breaks = seq(2010, 2019, by = 1)) +
   labs(title = "Percent Change of 40th Percentile FMR Year over Year",
-       y = "Average Percent Change") +
+       y = "Percent Change") +
+  theme_classic() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
@@ -136,7 +178,7 @@ affordability <- aggregate(FMR_Change_clean$mean_change,
 #rename columns
 colnames(affordability) <- c("countyname", "state_alpha", "year", "gross_FMR_Change")
 
-# Find outliers using gross average percent change my county
+# Find outliers using gross average percent change by county
 affordability_county <- affordability %>%
   filter(gross_FMR_Change > upper | gross_FMR_Change < lower)
 
@@ -145,6 +187,20 @@ affordability_low <- affordability_county %>% filter(gross_FMR_Change > 0)
 affordability_low %>% count(state_alpha) %>% arrange(desc(n))
 ```
 
+```{r Find the counties and states with the highest average YoY change in FMR from 2010 to 2019}
+SMRY_County_PCT_Change <- FMR_Change_clean %>% 
+  group_by(state = state_alpha, county = countyname) %>% 
+  summarize(Percent_Change_FMR = mean(mean_change)) %>% 
+  arrange(desc(Percent_Change_FMR))
+
+SMRY_State_PCT_Change <- FMR_Change_clean %>% 
+  group_by(state = state_alpha) %>% 
+  summarize(Percent_Change_FMR = mean(mean_change)) %>% 
+  arrange(desc(Percent_Change_FMR))
+
+SMRY_County_PCT_Change
+SMRY_State_PCT_Change
+```
 
 
 
@@ -215,11 +271,8 @@ for (i in x) {
 ```
 
 ```{r Eport Files}
-
-
 #export table into xlsx
-#write.xlsx(medianInc2010_2019, here("FMR_2010_2019", "Required_Mean_Salary.xlsx"))
-
+write.xlsx(medianInc2010_2019, here("FMR_2010_2019", "Required_Mean_Salary.xlsx"))
 write.xlsx(affordability, here("FMR_2010_2019", "Affordability_byCounty.xlsx"))
 ```
 

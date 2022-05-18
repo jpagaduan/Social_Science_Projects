@@ -1,0 +1,226 @@
+---
+title: "Wages and Cost of Living in the Homelessness Sector"
+output: html_notebook
+---
+
+```{r Libraries}
+library("dplyr")
+library("readxl")
+library("here")
+library(xlsx)
+
+here()
+```
+
+
+```{r Import Files}
+#import FMR HUD data sets from 2010 to 2019
+FMR10 <- read_excel(here("FMR_2010_2019", "FY2010_4050_Final_PostRDDs.xls"))
+FMR11 <- read_excel(here("FMR_2010_2019", "FY2011_4050_Final.xls"))
+FMR12 <- read_excel(here("FMR_2010_2019", "FY2012_4050_Final.xls"))
+FMR13 <- read_excel(here("FMR_2010_2019", "FY2013_4050_Final.xls"))
+FMR14 <- read_excel(here("FMR_2010_2019", "FY2014_4050_RevFinal.xls"))
+FMR15 <- read_excel(here("FMR_2010_2019", "FY2015_4050_RevFinal.xls"))
+FMR16 <- read_excel(here("FMR_2010_2019", "FY2016F-4050-RevFinal4.xlsx"))
+FMR17 <- read_excel(here("FMR_2010_2019", "FY2017-4050-County-Level_Data.xlsx"))
+FMR18 <- read_excel(here("FMR_2010_2019", "FY18_4050_FMRs_rev.xlsx"))
+FMR19 <- read_excel(here("FMR_2010_2019", "FY2019_4050_FMRs_rev2.xlsx"))
+```
+
+
+```{r Weighted 40th percentile FMR}
+#calculate required minimum salary
+m10 <- FMR10 %>% select(fmr1, pop = pop2000, countyname, state_alpha, FIPS) %>% mutate(year = 2010, w_mean = (fmr1 * pop)/pop)
+m11 <- FMR11 %>% select(fmr1, pop = pop2000, countyname, state_alpha, FIPS) %>% mutate(year = 2011, w_mean = (fmr1 * pop)/pop)
+m12 <- FMR12 %>% select(fmr1, pop = pop2000, countyname, state_alpha, FIPS) %>% mutate(year = 2012, w_mean = (fmr1 * pop)/pop)
+
+m13 <- FMR13 %>% select(fmr1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2013, w_mean = (fmr1 * pop)/pop)
+m14 <- FMR14 %>% select(fmr1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2014, w_mean = (fmr1 * pop)/pop)
+m15 <- FMR15 %>% select(fmr1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2015, w_mean = (fmr1 * pop)/pop)
+m16 <- FMR16 %>% select(fmr1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2016, w_mean = (fmr1 * pop)/pop)
+m17 <- FMR17 %>% select(fmr1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2017, w_mean = (fmr1 * pop)/pop)
+
+m18 <- FMR18 %>% select(fmr1 = fmr_1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2018, w_mean = (fmr1 * pop)/pop)
+m19 <- FMR19 %>% select(fmr1 = fmr_1, pop = pop2010, countyname, state_alpha, FIPS = fips2010 ) %>% mutate(year = 2019, w_mean = (fmr1 * pop)/pop)
+
+#Join means together in a data frame
+FMR_1BR_10_19 <- rbind(m10, m11, m12, m13, m14, m15, m16, m17, m18, m19) 
+
+#Remove U.S. territories
+FMR_1BR_10_19 <- FMR_1BR_10_19 %>% filter(state_alpha != "PR" & state_alpha != "SA" & state_alpha != "GU")
+
+#remove no longer needed variables
+rm(m10, m11, m12, m13, m14, m15, m16, m17, m18, m19)
+
+write.xlsx(FMR_1BR_10_19, here("FMR_2010_2019", "FMR_Original.xlsx"))
+
+FMR_1BR_10_19 <- na.omit(FMR_1BR_10_19)
+```
+
+```{r Change in 1BR FMR per year}
+#calculate weighted mean 1BR FMR for each year 
+FMR_Change <- FMR_1BR_10_19 %>% filter(year == 2010) %>% 
+  select(countyname, state_alpha, FIPS, year, w_mean) %>% 
+  mutate(FMR_PCT_Change = 0)
+
+years <- c(2011:2019)
+
+base <- FMR_Change
+
+for (i in years) {
+  cur <- FMR_1BR_10_19 %>% 
+    select(countyname, state_alpha, FIPS, year, w_mean) %>%
+    filter(year == i)
+  sub <- merge(cur, base, 
+               by.x = c("state_alpha", "countyname", "FIPS"), 
+               by.y = c("state_alpha", "countyname", "FIPS"))
+  sub <- sub %>% mutate(FMR_PCT_Change = (sub$w_mean.x - sub$w_mean.y)/w_mean.y)
+  ap <- sub %>% select(countyname, 
+                       state_alpha, 
+                       FIPS, 
+                       year = year.x, 
+                       w_mean = w_mean.x, 
+                       FMR_PCT_Change)
+  FMR_Change <- rbind(FMR_Change, ap)
+  base <- cur
+}
+
+rm(base, cur, sub, ap)
+```
+
+```{r Visualize FMR PRCNT Changes over time}
+library(ggplot2)
+
+FMR_Change_clean <- FMR_Change %>% 
+  group_by(FIPS, state_alpha, countyname, year) %>% 
+  summarise(mean_change = mean(FMR_PCT_Change)) %>% 
+  arrange(desc(year))
+
+ggplot(FMR_Change_clean, aes(year, mean_change, group = year)) +
+  geom_boxplot() +
+  scale_x_continuous(breaks = seq(2010, 2019, by = 1)) +
+  labs(title = "Percent Change of 40th Percentile FMR Year over Year",
+       y = "Average Percent Change") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+```{r Clean Data}
+#Looking at the data, it seems like 2010 uses a different method to calculate change in FMR so let's remove it before we export the data.
+FMR_Change_clean <- FMR_Change_clean %>% filter(year != 2010)
+
+#Let's also remove NULL values
+FMR_Change_clean <- na.omit(FMR_Change_clean)
+```
+
+
+```{r Find Outliers}
+#Find outliers
+q1 <- quantile(FMR_Change_clean$mean_change, 0.25) #returns first quartile
+q3 <- quantile(FMR_Change_clean$mean_change, 0.75) #returns third quartile
+iqr <- q3 - q1
+
+# Calculate the lower and upper cutoffs for outliers
+lower <- q1 - 1.5 * iqr
+upper <- q3 + 1.5 * iqr
+
+
+
+affordability <- aggregate(FMR_Change_clean$mean_change, 
+          by = list(FMR_Change_clean$countyname, 
+                    FMR_Change_clean$state_alpha, 
+                    FMR_Change_clean$year), 
+          FUN = mean, na.rm = TRUE)
+
+
+#rename columns
+colnames(affordability) <- c("countyname", "state_alpha", "year", "gross_FMR_Change")
+
+# Find outliers using gross average percent change my county
+affordability_county <- affordability %>%
+  filter(gross_FMR_Change > upper | gross_FMR_Change < lower)
+
+affordability_low <- affordability_county %>% filter(gross_FMR_Change > 0)
+
+affordability_low %>% count(state_alpha) %>% arrange(desc(n))
+```
+
+
+
+
+```{r Change in Income}
+#To make a comparison, let's make the required cost of living based on the the pre-requisite that rent should be 30% of a person's salary
+
+#Set 2010 as the base, and let it increase by .30% every year 
+Inc <- FMR_1BR_10_19 %>% 
+  filter(year == 2010) %>% 
+  select(countyname, state_alpha, FIPS, year, w_mean) %>% 
+  mutate(req_mo_income = w_mean / .30, req_an_income = (w_mean /.30) * 12)
+
+base <- Inc
+
+for (i in years) {
+  cur <- FMR_1BR_10_19 %>% 
+    filter(year == i) %>% 
+    select(countyname, state_alpha, FIPS, year, w_mean)
+  sub <- merge(cur, base, 
+               by.x = c("state_alpha", "countyname", "FIPS"), 
+               by.y = c("state_alpha", "countyname", "FIPS"))
+  sub <- sub %>% mutate(req_mo_income.x = req_mo_income * 1.03,
+                        req_an_income.x = req_mo_income * 1.03 * 12)
+  ap <- sub %>% select(countyname, 
+                       state_alpha, 
+                       FIPS, 
+                       year = year.x, 
+                       w_mean = w_mean.x,
+                       req_mo_income = req_mo_income.x,
+                       req_an_income = req_an_income.x)
+  Inc <- rbind(Inc, ap)
+  base <- ap
+}
+
+rm(base, cur, sub, ap)
+
+MergedInc_FMR <- merge(FMR_1BR_10_19, Inc, 
+                       by.x = c("countyname", "state_alpha", "FIPS", "year", "w_mean"),
+                       by.y = c("countyname", "state_alpha", "FIPS", "year", "w_mean"))
+
+#This is a big file so we need to export as csv
+write.csv(MergedInc_FMR, here("FMR_2010_2019", "MergedInc_FMR.csv"))
+```
+
+
+```{r Alternative Comparison: National Median Income}
+#Alternatively, we can take the national median income for 2010, and let it increase by 3% every yeat to se if catches up with rental increases
+
+FMR_1BR_10_19 <- FMR_1BR_10_19 %>% 
+  mutate(req_mo_income = w_mean / .30, req_an_income = req_mo_income * 12) %>% 
+  arrange(desc(w_mean))
+
+#make table with a baseline 2010 mean salary in the U.S.
+medianInc2010_2019 <- FMR_1BR_10_19 %>% filter(year == 2010) %>% summarise(med_inc = mean(req_an_income, na.rm = T))
+
+medianInc2010_2019 <- medianInc2010_2019 %>% mutate(year = 2010)
+
+
+#add rows with required salaries where the base 2010 salary increases 3% every year from 2010 to 2019
+
+x = c(1:9)
+
+for (i in x) {
+  medianInc2010_2019[1 + i,1] <- medianInc2010_2019[1 + i - 1,1] * 1.03
+  medianInc2010_2019[1 + i, 2] <- 2010 + i
+}
+
+```
+
+```{r Eport Files}
+
+
+#export table into xlsx
+#write.xlsx(medianInc2010_2019, here("FMR_2010_2019", "Required_Mean_Salary.xlsx"))
+
+write.xlsx(affordability, here("FMR_2010_2019", "Affordability_byCounty.xlsx"))
+```
+
+
